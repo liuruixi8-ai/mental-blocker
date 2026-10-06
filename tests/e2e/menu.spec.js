@@ -42,10 +42,10 @@ test.describe('menu', () => {
     await expect(page.locator('#level-label')).toHaveText(`LEVEL 1 OF ${LEVELS.length}`);
   });
 
-  test('clicking a locked level shakes it and stays on the menu', async ({ page }) => {
+  test('clicking a locked level stays on the menu', async ({ page }) => {
     await page.goto('/');
-    await tile(page, 5).click({ force: true }); // aria-disabled tiles are still clickable for a real user
-    await expect(tile(page, 5)).toHaveClass(/shake/);
+    await expect(tile(page, 5)).toHaveJSProperty('disabled', true);
+    await tile(page, 5).click({ force: true }); // native disabled buttons cannot activate
     await expect(page.locator('#level-select')).toBeVisible();
     await expect(page.locator('#game')).toBeHidden();
   });
@@ -61,9 +61,9 @@ test.describe('menu', () => {
     await expect(tile(page, 7).locator('.lock')).toBeVisible();
   });
 
-  test('unlocking depends on the previous level only', async ({ page }) => {
+  test('gaps in passing scores cannot unlock later levels', async ({ page }) => {
     await loadWithCompleted(page, [1, 7]);
-    expect(await lockedLevels(page)).toEqual([3, 4, 5, 6, 7, ...range(9, LEVELS.length)]);
+    expect(await lockedLevels(page)).toEqual(range(3, LEVELS.length));
   });
 
   for (const [what, raw] of [['corrupt JSON', '{oops'], ['the wrong shape', '{"completed":"everything"}']]) {
@@ -97,7 +97,7 @@ test.describe('menu', () => {
     await expect(page.locator('#level-select')).toBeVisible();
     expect(await lockedLevels(page)).toEqual(range(3, LEVELS.length));
     await expect(tile(page, 1)).toHaveAttribute('data-done', 'true');
-    expect(await page.evaluate(k => localStorage.getItem(k), KEY)).toBe('{"completed":[1]}');
+    expect(await page.evaluate(k => localStorage.getItem(k), KEY)).toBe('{"bestMoves":{"1":1}}');
   });
 
   test('the menu works from the keyboard', async ({ page }) => {

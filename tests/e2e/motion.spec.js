@@ -35,6 +35,25 @@ test.describe('with animations', () => {
     expect((await hud(page)).moves).toBe(1);
   });
 
+  test('restart during a slide resets blocks and the visible count without a late increment', async ({ page }, testInfo) => {
+    const pointer = pointerFor(testInfo);
+    await openLevel(page, 6);
+    await swipe(page, 0, 0, 'D', { pointer });
+    await expect(page.locator('#moves')).toHaveText('1/5 moves');
+    await slowAnimations(page, 0.1);
+    await swipe(page, 2, 2, 'R', { pointer, settleAfter: false });
+    await expect(page.locator('#board')).toHaveAttribute('data-phase', 'animating');
+    if (pointer === 'touch') await page.locator('#restart').tap();
+    else await page.locator('#restart').click();
+    await expect(page.locator('#moves')).toHaveText('0/5 moves');
+    await expect(page.locator('#board')).toHaveAttribute('data-phase', 'idle', { timeout: 10000 });
+    expect(await blocks(page)).toEqual(expectedBlocks(6));
+    // Let the interrupted animation finish too, exposing any stale async updates.
+    await page.waitForTimeout(3000);
+    await expect(page.locator('#moves')).toHaveText('0/5 moves');
+    expect(await blocks(page)).toEqual(expectedBlocks(6));
+  });
+
   test('the board goes intro, idle, animating, ..., solved, then the next intro', async ({ page }, testInfo) => {
     await recordPhases(page);
     await openLevel(page, 2);

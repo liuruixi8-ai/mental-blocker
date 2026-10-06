@@ -18,8 +18,10 @@ Press on a block and swipe in a direction, with a mouse or a finger. Swiping is 
 move a block. The buttons under the board restart the level, turn sound off and on, and open the
 level menu.
 
-Progress is saved in `localStorage` under `safezone.v1`, and the sound setting under
-`safezone.sound`.
+Passing move counts are saved in `localStorage` under `safezone.v2`, and the sound setting under
+`safezone.sound`. A level unlocks only after every earlier level has a saved score within its
+move limit. Old `safezone.v1` saves are retained but do not unlock levels, because they did not
+record move counts and could include failed attempts.
 
 ## Sound
 

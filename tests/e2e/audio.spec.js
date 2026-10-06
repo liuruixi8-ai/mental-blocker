@@ -1,7 +1,7 @@
 'use strict';
 /*
  * The swipe sound. Headless Chromium allows audio without a gesture, so these tests log the
- * game's own play() calls rather than relying on the browser to block anything.
+ * game's play() calls and successful playback, with unit tests covering blocked requests.
  */
 const { test, expect, openLevel, swipe, pointerFor } = require('./helpers');
 
@@ -10,11 +10,13 @@ const SOUND_KEY = 'safezone.sound';
 /* Logs every media play() by file name. */
 async function recordAudio(page) {
   await page.addInitScript(() => {
-    const log = window.__audio = { plays: [] };
+    const log = window.__audio = { plays: [], started: [] };
     const { play } = HTMLMediaElement.prototype;
     HTMLMediaElement.prototype.play = function () {
       log.plays.push(this.src.split('/').pop());
-      return play.call(this);
+      return play.call(this).then(() => {
+        log.started.push({ file: this.src.split('/').pop(), muted: this.muted, volume: this.volume });
+      });
     };
   });
 }
@@ -25,6 +27,18 @@ const soundButton = page => page.locator('#sound');
 
 test.describe('sound', () => {
   test.beforeEach(async ({ page }) => { await recordAudio(page); });
+
+  test('unmuted swipes actually start audible playback (#7)', async ({ page }, testInfo) => {
+    await openLevel(page, 2);
+    const started = () => page.evaluate(() => window.__audio.started.length);
+    await expect.poll(started).toBeGreaterThan(0); // the initial user gesture unlocks audio
+    const before = await started();
+    await swipe(page, 2, 0, 'R', { pointer: pointerFor(testInfo) });
+    await expect.poll(started).toBe(before + 1);
+    expect(await page.evaluate(() => window.__audio.started.at(-1))).toEqual({
+      file: 'Swipe.wav', muted: false, volume: 1,
+    });
+  });
 
   test('every slide plays the swipe sound once', async ({ page }, testInfo) => {
     const pointer = pointerFor(testInfo);

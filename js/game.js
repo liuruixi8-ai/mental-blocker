@@ -25,7 +25,7 @@
   const wait = t => new Promise(resolve => setTimeout(resolve, t));
 
   const storage = (() => { try { return window.localStorage; } catch (e) { return null; } })();
-  const completed = Store.load(storage);
+  const completed = Store.load(storage, LEVELS);
 
   // Current level. `token` changes whenever a level (re)starts so stale async steps can bail out.
   let game = null;
@@ -47,6 +47,7 @@
   /* ---------- Level lifecycle ---------- */
 
   function startLevel(n, { fullIntro = true } = {}) {
+    if (!Store.isUnlocked(n, completed, LEVELS)) return;
     hideOverlays();
     gameScreen.hidden = false;
     const def = LEVELS[n - 1];
@@ -123,7 +124,7 @@
     const movesEl = $('#moves');
     movesEl.dataset.moves = moves;
     movesEl.dataset.par = par;
-    movesEl.classList.toggle('over-par', moves >= par);
+    movesEl.classList.toggle('over-par', moves > par);
     $('#moves-count').textContent = moves;
     $('#moves-par').textContent = par;
     $('#moves-unit').textContent = par === 1 ? 'move' : 'moves';
@@ -134,7 +135,7 @@
 
   function refreshBlocks() {
     for (const b of game.blocks) {
-      if (game.level.isZone[b.at] === 1) b.el.classList.add('on-zone');
+      b.el.classList.toggle('on-zone', game.level.isZone[b.at] === 1);
     }
   }
 
@@ -192,10 +193,10 @@
     if (t !== game.token) return;
 
     refreshBlocks();
-    if (E.isSolved(game.level, blockPositions())) solved();
-    else setPhase('idle');
     game.moves++;
     updateHud();
+    if (E.isSolved(game.level, blockPositions())) solved();
+    else setPhase('idle');
   }
 
   /* A move that goes nowhere: a small nudge. */
@@ -216,8 +217,10 @@
     const t = game.token;
     setPhase('solved');
     const inPar = moves <= par;
-    completed.add(n);
-    Store.save(storage, completed);
+    if (inPar) {
+      completed.set(n, Math.min(moves, completed.get(n) ?? Infinity));
+      Store.save(storage, completed);
+    }
     await wait(inPar ? 900 : 700);
     if (t !== game.token) return;
     if (!inPar) { showOverPar(); return; }
@@ -226,19 +229,18 @@
         .finished.catch(() => {});
       await wait(ms(180));
       if (t === game.token) startLevel(n + 1);
-    } else {
+    } else if (LEVELS.every((_, i) => completed.has(i + 1))) {
       showAllComplete();
+    } else {
+      showMessage(`Level ${n} complete! Finish the remaining levels to complete the game.`, [
+        { label: 'Level Select', color: 'teal', action: () => openLevelSelect('menu') },
+      ]);
     }
   }
 
   function restart() {
     if (!game) return;
-    Object.assign(game, { blocks: [], token: ++token });
-    gesture = null;
-    buildBoard();
-    layout();
-    updateHud();
-    playIntro(false);
+    startLevel(game.n, { fullIntro: false });
   }
 
   /* ---------- Input: a block moves only when it is swiped ---------- */
@@ -331,10 +333,11 @@
     levelGrid.replaceChildren();
     LEVELS.forEach((_, i) => {
       const n = i + 1;
-      const locked = !Store.isUnlocked(n, completed);
+      const locked = !Store.isUnlocked(n, completed, LEVELS);
       const done = completed.has(n);
       const tile = document.createElement('button');
       tile.type = 'button';
+      tile.disabled = locked;
       tile.className = 'level-tile';
       tile.dataset.level = n;
       tile.dataset.locked = locked;
@@ -348,12 +351,7 @@
         tile.insertAdjacentHTML('beforeend', DONE_SVG);
       }
       tile.addEventListener('click', () => {
-        if (locked) {
-          tile.classList.remove('shake');
-          void tile.offsetWidth; // restart the animation
-          tile.classList.add('shake');
-          return;
-        }
+        if (!Store.isUnlocked(n, completed, LEVELS)) return;
         startLevel(n);
       });
       levelGrid.append(tile);
@@ -379,9 +377,9 @@
   function showOverPar() {
     const { par } = game;
     showMessage(
-      `Nice job! But to level up, you need to solve this level in no fewer than ${par} ${par === 1 ? 'move' : 'moves'}. Try again?`,
+      `Nice job! But to level up, you need to solve this level in no more than ${par} ${par === 1 ? 'move' : 'moves'}. Try again?`,
       [
-        { label: 'Retry Level', color: 'teal', action: () => startLevel(game.n, { fullIntro: false }) },
+        { label: 'Retry Level', color: 'teal', action: restart },
         { label: 'Level Select', color: 'red', action: () => openLevelSelect('menu') },
       ]);
   }

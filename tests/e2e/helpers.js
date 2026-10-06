@@ -7,7 +7,7 @@ const { test: base, expect } = require('@playwright/test');
 const E = require('../../js/engine.js');
 const LEVELS = require('../../js/levels.js');
 
-const KEY = 'safezone.v1';
+const { KEY } = require('../../js/storage.js');
 
 /* Every test fails if the page throws or logs a console error. */
 const test = base.extend({
@@ -30,7 +30,9 @@ async function load(page, raw) {
   await page.reload();
 }
 
-const loadWithCompleted = (page, completed) => load(page, JSON.stringify({ completed }));
+const loadWithCompleted = (page, completed) => load(page, JSON.stringify({
+  bestMoves: Object.fromEntries(completed.map(n => [n, LEVELS[n - 1].solution.length])),
+}));
 const range = (a, b) => Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => a + i);
 
 /* Records every value #board[data-phase] takes, into window.__phases. */
@@ -162,7 +164,7 @@ const pointerFor = testInfo => (testInfo.project.name === 'mobile' ? 'touch' : '
 const savedProgress = page => page.evaluate(key => localStorage.getItem(key), KEY);
 const savedCompleted = async page => {
   const raw = await savedProgress(page);
-  return raw ? JSON.parse(raw).completed : [];
+  return raw ? Object.keys(JSON.parse(raw).bestMoves).map(Number).sort((a, b) => a - b) : [];
 };
 
 module.exports = {

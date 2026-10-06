@@ -23,6 +23,7 @@ test.describe('going over par', () => {
     await expect(page.locator('#board')).toHaveAttribute('data-phase', 'idle');
     expect(await blocks(page)).toEqual(expectedBlocks(2));
     expect(await hud(page)).toMatchObject({ moves: 0, overPar: false, zonesLeft: 1 });
+    await expect(page.locator('#moves')).toHaveText('0/2 moves');
 
     // And now solving it in par works.
     await play(page, LEVELS[1].solution, { pointer: pointerFor(testInfo) });
